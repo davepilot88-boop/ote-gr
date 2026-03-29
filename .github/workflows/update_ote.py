@@ -27,30 +27,28 @@ def find_xlsx_url(html: str) -> str:
 def extract_prices(xlsx_bytes):
     wb = load_workbook(filename=BytesIO(xlsx_bytes), data_only=True)
 
-    quarter_rows = []
+    numbers = []
 
+    # projdi všechny buňky a vytáhni čísla
     for ws in wb.worksheets:
         for row in ws.iter_rows(values_only=True):
-            values = [str(v).strip() if v else "" for v in row]
-            if not values:
-                continue
+            for v in row:
+                if isinstance(v, (int, float)):
+                    numbers.append(float(v))
+                elif isinstance(v, str):
+                    txt = v.strip()
+                    if re.fullmatch(r"-?\d+[.,]\d+", txt):
+                        numbers.append(float(txt.replace(",", ".")))
 
-            if re.match(r"^\d{2}:\d{2}-\d{2}:\d{2}$", values[0]):
-                nums = []
-                for v in row:
-                    if isinstance(v, (int, float)):
-                        nums.append(float(v))
-                    elif isinstance(v, str) and re.fullmatch(r"-?\d+[.,]\d+", v.strip()):
-                        nums.append(float(v.replace(",", ".")))
-                if nums:
-                    quarter_rows.append(nums)
+    # hledáme sekvenci 24 realistických cen
+    for i in range(len(numbers) - 24):
+        chunk = numbers[i:i+24]
 
-    if len(quarter_rows) >= 96:
-        prices = [quarter_rows[i][-1] for i in range(0, 96, 4)]
-        if len(prices) == 24:
-            return prices
+        # filtr – ceny elektřiny dávají smysl cca -500 až 1000
+        if all(-500 < x < 1000 for x in chunk):
+            return chunk
 
-    raise SystemExit(f"Nenašel jsem 24 cen, jen {len(quarter_rows)} řádků.")
+    raise SystemExit(f"Nenašel jsem 24 cen v Excelu. Našel jsem {len(numbers)} čísel.")
 
 # --- MAIN ---
 
@@ -69,7 +67,7 @@ prices = extract_prices(xlsx_data)
 
 payload = {
     "date": page_date.strftime("%d.%m.%Y"),
-    "source": f"OTE XLSX",
+    "source": "OTE XLSX",
     "prices": prices
 }
 
