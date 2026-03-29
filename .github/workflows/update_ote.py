@@ -1,40 +1,76 @@
 import json
 import re
 from datetime import datetime, timedelta
-import requests
 from pathlib import Path
 
+import requests
+
 URL = "https://www.ote-cr.cz/cs/kratkodobe-trhy/elektrina/denni-trh"
+ROOT = Path("data")
+ROOT.mkdir(exist_ok=True)
 
-html = requests.get(URL).text
+def parse_date(s: str) -> datetime:
+    return datetime.strptime(s, "%d.%m.%Y")
 
-date_match = re.search(r"(\d{2}\.\d{2}\.\d{4})", html)
-date = date_match.group(1)
+html = requests.get(URL, timeout=30).text
 
-lines = html.split("\n")
-rows = [l for l in lines if re.match(r"\d{2}:\d{2}-\d{2}:\d{2}", l)]
+m = re.search(r"Výsledky denního trhu ČR\s*-\s*(\d{2}\.\d{2}\.\d{4})", html)
+if not m:
+    raise SystemExit("Na stránce OTE jsem nenašel datum.")
+page_date = parse_date(m.group(1))
+
+# Najdi všechny bloky začínající časem 00:00-00:15 apod.
+rows = re.findall(
+    r'(\d{2}:\d{2}-\d{2}:\d{2}.*?)(?=\d{2}:\d{2}-\d{2}:\d{2}|$)',
+    html,
+    flags=re.S
+)
 
 prices = []
-for i in range(0, len(rows), 4):
-    nums = re.findall(r"-?\d+,\d+", rows[i])
-    if nums:
-        prices.append(float(nums[-1].replace(",", ".")))
 
-data = {
-    "date": date,
-    "source": "OTE",
-    "prices": prices[:24]
+# OTE mívá 15min řádky, vezmeme každou 4. řádku = hodinová cena
+if len(rows) >= 96:
+    for i in range(0, 96, 4):
+        row = rows[i]
+        nums = re.findall(r'-?\d[\d\s]*,\d+', row)
+        if nums:
+            val = float(nums[-1].replace(" ", "").replace(",", "."))
+            prices.append(val)
+
+# Záloha: kdyby OTE někdy mělo už hodinové řádky
+if len(prices) != 24:
+    hourly_rows = re.findall(
+        r'(\d{2}:00-\d{2}:00.*?)(?=\d{2}:00-\d{2}:00|$)',
+        html,
+        flags=re.S
+    )
+    alt_prices = []
+    for row in hourly_rows:
+        nums = re.findall(r'-?\d[\d\s]*,\d+', row)
+        if nums:
+            val = float(nums[-1].replace(" ", "").replace(",", "."))
+            alt_prices.append(val)
+    if len(alt_prices) == 24:
+        prices = alt_prices
+
+if len(prices) != 24:
+    raise SystemExit(f"Nepodařilo se získat 24 hodinových cen. Našel jsem jen {len(prices)}.")
+
+payload = {
+    "date": page_date.strftime("%d.%m.%Y"),
+    "source": "OTE veřejná stránka",
+    "prices": prices,
 }
 
-today = datetime.now().date()
+today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
 tomorrow = today + timedelta(days=1)
 
-page_date = datetime.strptime(date, "%d.%m.%Y").date()
-
-path = Path("data")
-path.mkdir(exist_ok=True)
-
-if page_date == today:
-    (path / "today.json").write_text(json.dumps(data))
+if page_date.date() == today.date():
+    (ROOT / "today.json").write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+elif page_date.date() == tomorrow.date():
+    (ROOT / "tomorrow.json").write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 else:
-    (path / "tomorrow.json").write_text(json.dumps(data))
+    # když OTE ukazuje jiný den dopředu, uložíme to aspoň do tomorrow.json
+    (ROOT / "tomorrow.json").write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
+print("Hotovo.")
