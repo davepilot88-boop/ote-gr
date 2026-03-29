@@ -19,7 +19,7 @@ jobs:
           python-version: "3.11"
 
       - name: Install deps
-        run: pip install requests beautifulsoup4 lxml
+        run: pip install requests openpyxl
 
       - name: Fetch and save OTE data
         run: python .github/workflows/update_ote.py
