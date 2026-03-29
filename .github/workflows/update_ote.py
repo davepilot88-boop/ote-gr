@@ -41,12 +41,12 @@ def extract_prices(xlsx_bytes):
                         numbers.append(float(txt.replace(",", ".")))
 
     # hledáme sekvenci 24 realistických cen
-    for i in range(len(numbers) - 24):
-        chunk = numbers[i:i+24]
+   for i in range(len(numbers) - 24):
+    chunk = numbers[i:i+24]
 
-        # filtr – ceny elektřiny dávají smysl cca -500 až 1000
-        if all(-500 < x < 1000 for x in chunk):
-            return chunk
+    # jen základní kontrola
+    if all(isinstance(x, (int, float)) for x in chunk):
+        return chunk
 
     raise SystemExit(f"Nenašel jsem 24 cen v Excelu. Našel jsem {len(numbers)} čísel.")
 
