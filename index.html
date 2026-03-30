@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <title>OTE Cena – upravené rozložení</title>
+  <style>
+    :root{
+      --bg:#f5f7fb; --card:#ffffff; --text:#18212f; --muted:#667085; --line:#d9e0ea;
+      --accent:#2463eb; --good:#1f9d55; --warn:#f79009; --bad:#d92d20; --radius:18px;
+      --shadow:0 10px 30px rgba(16,24,40,.08);
+    }
+    @media (prefers-color-scheme: dark){
+      :root{
+        --bg:#0f1722; --card:#182230; --text:#eef2f7; --muted:#a0acbd; --line:#2b3645;
+        --accent:#77a7ff; --good:#3ddc84; --warn:#ffb547; --bad:#ff7369; --shadow:0 10px 30px rgba(0,0,0,.25);
+      }
+    }
+    *{box-sizing:border-box}
+    body{margin:0;background:var(--bg);color:var(--text);font:16px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+    .app{max-width:980px;margin:0 auto;padding:max(20px, env(safe-area-inset-top)) 16px max(20px, env(safe-area-inset-bottom))}
+    .header{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:16px}
+    h1{font-size:32px;margin:0 0 4px;line-height:1.05}
+    .subtitle{color:var(--muted);margin:0}
+    .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:16px;margin-bottom:16px}
+    .badge{display:inline-block;border-radius:999px;padding:6px 10px;font-size:12px;font-weight:700;background:rgba(36,99,235,.12);color:var(--accent)}
+    .note{color:var(--muted);font-size:14px}
+    .stats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+    @media(min-width:760px){.stats{grid-template-columns:repeat(4,minmax(0,1fr))}}
+    .stat{border:1px solid var(--line);border-radius:14px;padding:14px;background:linear-gradient(180deg, rgba(255,255,255,.04), rgba(0,0,0,.02))}
+    .label{color:var(--muted);font-size:13px;margin-bottom:6px}
+    .value{font-size:26px;font-weight:800;letter-spacing:-.02em}
+    .controls{display:grid;grid-template-columns:1fr;gap:12px}
+    @media(min-width:760px){.controls{grid-template-columns:repeat(4,1fr)}}
+    .field label{display:block;font-size:13px;color:var(--muted);margin-bottom:6px}
+    .field input{width:100%;padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:var(--card);color:var(--text);font-size:16px}
+    .chart-wrap{overflow-x:auto;padding-bottom:6px}
+    .chart{height:290px;min-width:760px;display:flex;align-items:flex-end;gap:6px;padding:18px 4px 30px;border-bottom:1px solid var(--line)}
+    .bar-col{flex:1;min-width:24px;display:flex;flex-direction:column;align-items:center;gap:8px}
+    .bar{width:100%;border-radius:10px 10px 4px 4px;background:var(--accent);position:relative;min-height:2px}
+    .bar.good{background:var(--good)}
+    .bar.warn{background:var(--warn)}
+    .bar.bad{background:var(--bad)}
+    .bar.current{outline:2px solid rgba(36,99,235,.45);outline-offset:2px}
+    .bar-val{font-size:11px;color:var(--muted);white-space:nowrap}
+    .bar-label{position:absolute;bottom:-24px;font-size:11px;color:var(--muted)}
+    .legend{display:flex;gap:14px;flex-wrap:wrap;margin-top:12px}
+    .legend span{display:flex;align-items:center;gap:8px;font-size:14px;color:var(--muted)}
+    .dot{width:12px;height:12px;border-radius:999px;display:inline-block}
+    .summary{display:grid;gap:10px}
+    .summary-item{padding:12px 14px;border:1px solid var(--line);border-radius:14px;background:rgba(128,128,128,.04)}
+    .summary-item strong{display:block;margin-bottom:2px}
+    .table{width:100%;border-collapse:collapse;font-size:15px}
+    .table th,.table td{padding:10px 8px;border-bottom:1px solid var(--line);text-align:left}
+    .table td:last-child,.table th:last-child{text-align:right;font-variant-numeric:tabular-nums}
+    .red{color:var(--bad);font-weight:700}
+    .orange{color:var(--warn);font-weight:700}
+    .green{color:var(--good);font-weight:700}
+  </style>
+</head>
+<body>
+<div class="app">
+  <div class="header">
+    <div>
+      <h1>OTE Cena</h1>
+      <p class="subtitle">Čistý výsledek po odečtení poplatku za prodej</p>
+    </div>
+    <span class="badge">29.03.2026</span>
+  </div>
+
+  <div class="card">
+    <div class="chart-wrap"><div class="chart" id="chart"></div></div>
+    <div class="legend">
+      <span><i class="dot" style="background:var(--good)"></i> nad limitem</span>
+      <span><i class="dot" style="background:var(--warn)"></i> nízký zisk</span>
+      <span><i class="dot" style="background:var(--bad)"></i> pod limitem / ztráta</span>
+    </div>
+    <p class="note" style="margin-top:12px;">
+      Číslo nad sloupcem je čistý výsledek v Kč/MWh. Výška sloupce odpovídá absolutní velikosti výsledku.
+    </p>
+  </div>
+
+  <div class="card">
+    <div class="stats">
+      <div class="stat"><div class="label">Nejhorší čistý výsledek</div><div class="value" id="minNetVal">–</div></div>
+      <div class="stat"><div class="label">Nejlepší čistý výsledek</div><div class="value" id="maxNetVal">–</div></div>
+      <div class="stat"><div class="label">Průměrný čistý výsledek</div><div class="value" id="avgNetVal">–</div></div>
+      <div class="stat"><div class="label">Teď čistý výsledek</div><div class="value" id="nowNetVal">–</div></div>
+    </div>
+  </div>
+
+  <div class="card"><div class="summary" id="summary"></div></div>
+
+  <div class="card">
+    <h3 style="margin:0 0 12px;">Hodinové ceny a čistý výsledek</h3>
+    <div style="overflow:auto">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Hodina</th>
+            <th>Spot cena (EUR/MWh)</th>
+            <th>Čistý výsledek (Kč/MWh)</th>
+          </tr>
+        </thead>
+        <tbody id="priceTable"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="controls">
+      <div class="field">
+        <label for="feeInput">Poplatek za 1 MWh (Kč)</label>
+        <input id="feeInput" type="number" step="1" value="500" />
+      </div>
+      <div class="field">
+        <label for="fxInput">Kurz EUR/CZK</label>
+        <input id="fxInput" type="number" step="0.01" value="25.00" />
+      </div>
+      <div class="field">
+        <label for="thresholdInput">Červená od čistého výsledku pod (Kč/MWh)</label>
+        <input id="thresholdInput" type="number" step="1" value="0" />
+      </div>
+      <div class="field">
+        <label for="mwhHourInput">Dodané MWh za hodinu</label>
+        <input id="mwhHourInput" type="number" step="0.01" value="1.00" />
+      </div>
+    </div>
+    <p class="note" style="margin-top:12px;">
+      Výpočet čistého výsledku: <strong>spot EUR/MWh × kurz EUR/CZK − poplatek</strong>. Denní součet počítá se stejnou dodávkou v každé hodině podle pole „Dodané MWh za hodinu“.
+    </p>
+  </div>
+</div>
+
+<script>
+const spotData = [115.62,109.04,107.88,105.80,112.18,109.33,109.93,115.00,114.91,96.22,78.03,70.59,70.42,39.56,18.10,19.23,26.26,68.38,100.77,122.10,114.31,98.36,95.91,85.00];
+
+function fmtEur(v){
+  return `${(Math.round(v * 100) / 100).toLocaleString("cs-CZ")} €`;
+}
+function fmtCzk(v){
+  return `${Math.round(v).toLocaleString("cs-CZ")} Kč`;
+}
+function fmtMwh(v){
+  return `${(Math.round(v * 100) / 100).toLocaleString("cs-CZ")} MWh`;
+}
+function hourRange(hour){
+  const next = (hour + 1) % 24;
+  return `${String(hour).padStart(2,"0")}:00–${String(next).padStart(2,"0")}:00`;
+}
+function readInputs(){
+  const fee = Number(document.getElementById("feeInput").value || 0);
+  const fx = Number(document.getElementById("fxInput").value || 0);
+  const threshold = Number(document.getElementById("thresholdInput").value || 0);
+  const mwhHour = Number(document.getElementById("mwhHourInput").value || 0);
+  return { fee, fx, threshold, mwhHour };
+}
+function computeNet(fee, fx){
+  return spotData.map(v => (v * fx) - fee);
+}
+function calcStats(arr){
+  const min = Math.min(...arr), max = Math.max(...arr);
+  const avg = arr.reduce((a,b)=>a+b,0)/arr.length;
+  const nowHour = new Date().getHours();
+  const nowVal = arr[Math.min(nowHour, 23)];
+  return { min,max,avg,nowVal, minHour: arr.indexOf(min), maxHour: arr.indexOf(max) };
+}
+function clsForValue(v, threshold){
+  if (v < threshold) return "bad";
+  if (v < threshold + 500) return "warn";
+  return "good";
+}
+function txtCls(v, threshold){
+  if (v < threshold) return "red";
+  if (v < threshold + 500) return "orange";
+  return "green";
+}
+function countBelow(arr, threshold){
+  return arr.filter(v => v < threshold).length;
+}
+function render(){
+  const { fee, fx, threshold, mwhHour } = readInputs();
+  const net = computeNet(fee, fx);
+  const stats = calcStats(net);
+  const dailyTotal = net.reduce((sum, v) => sum + (v * mwhHour), 0);
+  const lossTotal = net.filter(v => v < 0).reduce((sum, v) => sum + (v * mwhHour), 0);
+  const currentHour = new Date().getHours();
+
+  document.getElementById("minNetVal").textContent = fmtCzk(stats.min);
+  document.getElementById("maxNetVal").textContent = fmtCzk(stats.max);
+  document.getElementById("avgNetVal").textContent = fmtCzk(stats.avg);
+  document.getElementById("nowNetVal").textContent = fmtCzk(stats.nowVal);
+
+  const chart = document.getElementById("chart");
+  chart.innerHTML = "";
+  const maxAbs = Math.max(...net.map(v => Math.abs(v)), 1);
+
+  net.forEach((value, hour) => {
+    const col = document.createElement("div");
+    col.className = "bar-col";
+
+    const val = document.createElement("div");
+    val.className = "bar-val";
+    val.textContent = Math.round(value);
+
+    const bar = document.createElement("div");
+    bar.className = "bar " + clsForValue(value, threshold);
+    bar.style.height = `${Math.max(6, Math.round((Math.abs(value)/maxAbs)*190))}px`;
+    if (hour === currentHour) bar.classList.add("current");
+
+    const label = document.createElement("div");
+    label.className = "bar-label";
+    label.textContent = hour;
+
+    bar.appendChild(label);
+    col.appendChild(val);
+    col.appendChild(bar);
+    chart.appendChild(col);
+  });
+
+  const belowCount = countBelow(net, threshold);
+  const belowZeroCount = countBelow(net, 0);
+
+  document.getElementById("summary").innerHTML = `
+    <div class="summary-item"><strong>Nejhorší hodina</strong>${hourRange(stats.minHour)} (${fmtCzk(stats.min)})</div>
+    <div class="summary-item"><strong>Nejlepší hodina</strong>${hourRange(stats.maxHour)} (${fmtCzk(stats.max)})</div>
+    <div class="summary-item"><strong>Hodin pod zvoleným limitem</strong>${belowCount} hod. pod ${fmtCzk(threshold)}</div>
+    <div class="summary-item"><strong>Skutečně ztrátové hodiny</strong>${belowZeroCount} hod. pod 0 Kč/MWh při poplatku ${fmtCzk(fee)} a kurzu ${fx.toLocaleString("cs-CZ")}</div>
+    <div class="summary-item"><strong>Dodávka za hodinu</strong>${fmtMwh(mwhHour)}</div>
+    <div class="summary-item"><strong>Celkový denní součet</strong>${fmtCzk(dailyTotal)} za celý den při stejné hodinové dodávce</div>
+    <div class="summary-item"><strong>Součet jen ztrátových hodin</strong>${fmtCzk(lossTotal)} při stejné hodinové dodávce</div>
+  `;
+
+  document.getElementById("priceTable").innerHTML = spotData.map((spot, hour) => {
+    const netVal = net[hour];
+    return `
+      <tr>
+        <td>${hourRange(hour)}</td>
+        <td>${fmtEur(spot)}</td>
+        <td class="${txtCls(netVal, threshold)}">${fmtCzk(netVal)}</td>
+      </tr>
+    `;
+  }).join("");
+}
+
+["feeInput","fxInput","thresholdInput","mwhHourInput"].forEach(id => {
+  document.getElementById(id).addEventListener("input", render);
+});
+
+render();
+</script>
+</body>
+</html>
