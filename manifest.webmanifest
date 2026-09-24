@@ -1,0 +1,11 @@
+{
+  "name": "OTE Cena",
+  "short_name": "OTE Cena",
+  "lang": "cs",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f5f7fb",
+  "theme_color": "#2463eb",
+  "icons": [{"src": "graf.png", "sizes": "1024x1024", "type": "image/png"}]
+}

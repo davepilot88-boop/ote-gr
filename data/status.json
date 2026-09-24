@@ -1,0 +1,13 @@
+{
+  "checkedAt": "2026-09-24T11:24:20.245000+00:00",
+  "days": {
+    "today": {
+      "date": "24.09.2026",
+      "state": "available"
+    },
+    "tomorrow": {
+      "date": "25.09.2026",
+      "state": "available"
+    }
+  }
+}
