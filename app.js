@@ -58,23 +58,57 @@ if (typeof document !== 'undefined') {
     $('avgNetVal').textContent=`${czk(net.reduce((a,b)=>a+b,0)/net.length)} Kč/MWh`;
     $('nowNetVal').textContent=now<0?'–':`${czk(net[now])} Kč/MWh`;
     const chart=$('chart'); chart.replaceChildren();
-    const low=Math.min(0,min),high=Math.max(0,max),span=high-low||1,zero=high/span*100;
-    const line=document.createElement('span');line.className='zero-line';line.style.top=`calc(12px + ${zero/100*236}px)`;chart.append(line);
+    const low=Math.min(0,min)*1.08,high=Math.max(0,max)*1.08||1,span=high-low,zero=high/span*100;
+    [high,(high+low)/2,low].forEach(value=>{
+      const line=document.createElement('span');line.className='grid-line';line.style.top=`${(high-value)/span*100}%`;
+      const label=document.createElement('span');label.textContent=czk(value);line.append(label);chart.append(line);
+    });
+    const line=document.createElement('span');line.className='zero-line';line.style.top=`${zero}%`;chart.append(line);
     const detail=i=>{
       selectedBar=i;
-      $('tooltip').textContent=`${data.intervals[i].label} · OTE ${eur(data.prices[i])} EUR/MWh · Čistý výsledek ${czk(net[i])} Kč/MWh`;
+      chart.querySelectorAll('.bar-col').forEach((col,j)=>{col.classList.toggle('chosen',j===i);col.setAttribute('aria-pressed',String(j===i));});
+      const box=$('tooltip');box.replaceChildren();box.dataset.sign=net[i]<0?'negative':net[i]>0?'positive':'zero';
+      const add=(tag,cls,text)=>{const el=document.createElement(tag);el.className=cls;el.textContent=text;box.append(el);};
+      add('div','detail-time',`${data.date} · ${data.intervals[i].label}${i===now?' · NYNÍ':''}`);
+      add('div','detail-state',net[i]<0?'PRODEJ VE ZTRÁTĚ':net[i]>0?'PRODEJ V PLUSU':'NA NULE');
+      add('div','detail-net',`${net[i]>0?'+':''}${czk(net[i])} Kč/MWh`);
+      add('div','detail-caption','Čistý výsledek po poplatku za výkup');
+      add('div','detail-spot',`OTE · hodinová cena (60 min): ${eur(data.prices[i])} EUR/MWh`);
+      add('div','detail-formula',`${eur(data.prices[i])} × ${eur(s.fx)} − ${czk(s.fee)} = ${czk(net[i])} Kč/MWh`);
     };
     net.forEach((value,i)=>{
       const col=document.createElement('button');col.type='button';col.className='bar-col'+(i===now?' current':'');
       col.setAttribute('aria-label',`${data.intervals[i].label}: OTE ${eur(data.prices[i])} EUR/MWh, čistý výsledek ${czk(value)} Kč/MWh${i===now?', aktuální hodina':''}`);
       const bar=document.createElement('span');bar.className='bar '+color(value,s.threshold);
       bar.style.top=`${(high-Math.max(0,value))/span*100}%`;bar.style.height=`${Math.max(0.8,Math.abs(value)/span*100)}%`;
-      const label=document.createElement('span');label.className='bar-label';label.textContent=data.intervals[i].label.split(':')[0];
+      const label=document.createElement('span');label.className='bar-label';label.textContent=i%3===0 || i===net.length-1?data.intervals[i].label.split(':')[0]:'';
       col.append(bar,label);chart.append(col);
-      ['pointerenter','focus','click'].forEach(event=>col.addEventListener(event,()=>detail(i)));
+      col.addEventListener('pointerenter',event=>{if(event.pointerType==='mouse')detail(i);});
+      ['focus','click'].forEach(event=>col.addEventListener(event,()=>detail(i)));
+      col.addEventListener('keydown',event=>{
+        let next=i;
+        if(event.key==='ArrowRight')next=Math.min(net.length-1,i+1);
+        else if(event.key==='ArrowLeft')next=Math.max(0,i-1);
+        else return;
+        event.preventDefault();chart.querySelectorAll('.bar-col')[next].focus();detail(next);
+      });
     });
-    if(selectedBar!==null && selectedBar<net.length) detail(selectedBar);
-    else $('tooltip').textContent='Klepněte na sloupec nebo na něj najeďte myší pro detail.';
+    const selectAt=x=>{
+      const cols=chart.querySelectorAll('.bar-col');
+      let index=0,distance=Infinity;
+      cols.forEach((col,i)=>{const r=col.getBoundingClientRect();const d=Math.abs(x-r.left-r.width/2);if(d<distance){distance=d;index=i;}});
+      detail(index);
+    };
+    let activePointer=null;
+    chart.onpointerdown=event=>{if(event.isPrimary===false || event.button!==0)return;activePointer=event.pointerId;chart.setPointerCapture(event.pointerId);selectAt(event.clientX);};
+    chart.onpointermove=event=>{if(event.pointerId===activePointer)selectAt(event.clientX);};
+    chart.onpointerup=chart.onpointercancel=event=>{if(event.pointerId===activePointer){activePointer=null;if(chart.hasPointerCapture(event.pointerId))chart.releasePointerCapture(event.pointerId);}};
+    chart.onlostpointercapture=()=>{activePointer=null;};
+    // Capture retargets the click to the chart; the chosen hour remains selected.
+    detail(selectedBar!==null && selectedBar<net.length?selectedBar:now>=0?now:0);
+    $('nowSelection').hidden=now<0;
+    $('nowSelection').onclick=()=>detail(now);
+    $('nowSelection').onpointerup=()=>detail(now);
     const summary=[['Nejhorší hodina',`${data.intervals[net.indexOf(min)].label} (${czk(min)} Kč/MWh)`],
       ['Nejlepší hodina',`${data.intervals[net.indexOf(max)].label} (${czk(max)} Kč/MWh)`],
       ['Hodin pod zvoleným limitem',`${net.filter(v=>v<s.threshold).length} hod. pod ${czk(s.threshold)} Kč/MWh`],

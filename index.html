@@ -80,6 +80,23 @@
     .table{font-size:clamp(11px,3vw,15px);table-layout:fixed}.table th,.table td{padding:10px 4px;overflow-wrap:anywhere}
     #inputError{color:var(--bad)}
     @media(min-width:760px){.controls{grid-template-columns:repeat(3,1fr)}}
+    .chart-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px}
+    .chart-heading h2{font-size:18px;margin:0}.chart-heading small{color:var(--muted)}
+    #nowSelection{border:1px solid var(--line);background:var(--card);border-radius:20px;padding:8px 16px;min-height:44px}
+    .tooltip{margin:0 0 24px;border:0;background:color-mix(in srgb,var(--good) 7%,var(--card));padding:20px;border-radius:16px;min-height:225px}
+    .tooltip[data-sign="negative"]{background:color-mix(in srgb,var(--bad) 8%,var(--card))}
+    .detail-time{font-size:14px;font-weight:650;margin-bottom:14px}.detail-state{font-size:11px;font-weight:800;letter-spacing:.08em;color:var(--good)}
+    .detail-net{font-size:clamp(25px,7vw,40px);font-weight:800;letter-spacing:-.04em;color:var(--good);font-variant-numeric:tabular-nums}
+    [data-sign="negative"] .detail-state,[data-sign="negative"] .detail-net{color:var(--bad)}
+    [data-sign="zero"] .detail-state,[data-sign="zero"] .detail-net{color:var(--text)}
+    .detail-caption,.detail-formula{font-size:12px;color:var(--muted)}.detail-spot{margin-top:16px;font-size:13px;font-weight:650}.detail-formula{margin-top:4px}
+    .chart-wrap{padding:20px 0 30px 36px}.chart{height:220px;padding:0;gap:4px;border:0;touch-action:pan-y;user-select:none;-webkit-user-select:none}
+    .bar-col{z-index:1;touch-action:pan-y}.bar-col .bar{left:5%;width:90%;border-radius:5px;opacity:.65;pointer-events:none}
+    .bar-col.current{outline:2px solid var(--text);outline-offset:1px;background:transparent}
+    .bar-col.chosen{background:color-mix(in srgb,var(--accent) 12%,transparent)}.bar-col.chosen .bar{opacity:1;box-shadow:0 0 0 1px var(--text)}
+    .bar-label{font-size:11px;bottom:-25px;pointer-events:none}.grid-line{position:absolute;left:0;right:0;height:1px;background:var(--line);pointer-events:none}
+    .grid-line span{position:absolute;right:calc(100% + 7px);top:-7px;font-size:10px;color:var(--muted);white-space:nowrap}
+    .zero-line{background:var(--text);opacity:.45}.chart-hint{margin:12px 0 0;color:var(--muted);font-size:13px;text-align:center}
   </style>
 </head>
 <body>
@@ -99,15 +116,17 @@
   <p id="status" role="status" aria-live="polite">Načítám ceny OTE…</p>
   <button type="button" id="refresh">Obnovit data</button>
   <div class="card" data-results>
+    <div class="chart-heading"><div><h2>Výkup po poplatku</h2><small>Hodinový přehled · Kč/MWh</small></div><button type="button" id="nowSelection">Nyní</button></div>
+    <div id="tooltip" class="tooltip" aria-live="polite"></div>
     <div class="chart-wrap"><div class="chart" id="chart"></div></div>
-    <p id="tooltip" class="tooltip" aria-live="polite">Klepněte na sloupec pro detail.</p>
+    <p class="chart-hint">Táhněte prstem do stran a procházejte hodiny.</p>
     <div class="legend">
       <span><i class="dot" style="background:var(--good)"></i> nad limitem</span>
       <span><i class="dot" style="background:var(--warn)"></i> nízký výsledek</span>
       <span><i class="dot" style="background:var(--bad)"></i> pod limitem / ztráta</span>
     </div>
     <p class="note" style="margin-top:12px;">
-      Sloupce ukazují čistý výsledek v Kč/MWh; záporné hodnoty jsou pod nulovou osou. Oranžová označuje pásmo 500 Kč/MWh nad hranicí červené. Aktuální hodinu označuje kontrastní rámeček.
+      Pod nulovou čarou je prodej ztrátový. Oranžová označuje pásmo 500 Kč/MWh nad hranicí červené. Rámeček označuje aktuální hodinu. Výsledek zahrnuje nastavený poplatek za výkup, nikoli další náklady FVE. Hodinová cena se může lišit od ceny konkrétní čtvrthodiny.
     </p>
   </div>
 
@@ -162,6 +181,6 @@
   </div>
 </div>
 
-<script src="app.js" defer></script>
+<script src="app.js?v=2" defer></script>
 </body>
 </html>
