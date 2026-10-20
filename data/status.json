@@ -1,15 +1,13 @@
 {
-  "checkedAt": "2026-10-20T17:30:13.120278+00:00",
+  "checkedAt": "2026-10-20T20:50:48.327534+00:00",
   "days": {
     "today": {
       "date": "20.10.2026",
-      "state": "error",
-      "message": "HTTPError: HTTP Error 404: Not Found"
+      "state": "available"
     },
     "tomorrow": {
       "date": "21.10.2026",
-      "state": "error",
-      "message": "HTTPError: HTTP Error 404: Not Found"
+      "state": "available"
     }
   }
 }
