@@ -1,5 +1,5 @@
 {
-  "checkedAt": "2026-11-03T10:01:06.032481+00:00",
+  "checkedAt": "2026-11-03T17:46:57.178379+00:00",
   "days": {
     "today": {
       "date": "03.11.2026",
@@ -7,7 +7,7 @@
     },
     "tomorrow": {
       "date": "04.11.2026",
-      "state": "unpublished"
+      "state": "available"
     }
   }
 }
