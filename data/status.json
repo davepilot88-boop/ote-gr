@@ -1,13 +1,13 @@
 {
-  "checkedAt": "2026-11-19T18:38:10.831915+00:00",
+  "checkedAt": "2026-11-20T01:13:38.994524+00:00",
   "days": {
     "today": {
-      "date": "19.11.2026",
+      "date": "20.11.2026",
       "state": "available"
     },
     "tomorrow": {
-      "date": "20.11.2026",
-      "state": "available"
+      "date": "21.11.2026",
+      "state": "unpublished"
     }
   }
 }
