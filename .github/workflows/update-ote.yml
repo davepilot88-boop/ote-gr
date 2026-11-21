@@ -32,7 +32,7 @@ jobs:
       - name: Regression tests
         run: |
           python -m unittest discover -s tests -v
-          node --test tests/frontend.test.cjs
+          node --test tests/*.test.cjs
       - name: Fetch and validate OTE
         id: fetch
         continue-on-error: true
@@ -57,9 +57,19 @@ jobs:
         with:
           path: public
       - name: Deploy Pages (including error/unpublished status)
+        id: deploy
+        continue-on-error: true
+        uses: actions/deploy-pages@v4
+      - name: Wait before retrying Pages
+        if: steps.deploy.outcome == 'failure'
+        run: sleep 30
+      - name: Retry Pages deployment
+        if: steps.deploy.outcome == 'failure'
         uses: actions/deploy-pages@v4
       - name: Report fetch failure
         if: steps.fetch.outcome == 'failure'
         run: |
           echo '::error::OTE validation failed. Last valid prices were preserved. See Fetch and validate OTE logs.'
           exit 1
+
+
