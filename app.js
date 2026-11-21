@@ -28,10 +28,10 @@ function color(value, threshold) { return value<threshold?'bad':value<threshold+
 function currentIndex(data, now=Date.now()) { return data.intervals.findIndex(p=>Date.parse(p.start)<=now && now<Date.parse(p.end)); }
 function settingsValid(s) { return Object.values(s).every(Number.isFinite) && s.fee>=0 && s.fx>0; }
 if (typeof module !== 'undefined') module.exports={dateKey,validateData,calculate,color,currentIndex,settingsValid};
-
 if (typeof document !== 'undefined') {
   const $=id=>document.getElementById(id);
   let selected='today', data=null, sequence=0, loadedDate='', selectedBar=null;
+  let active=null, retryTimer=null, failures=0, lastAttempt=0;
   const eur=v=>v.toLocaleString('cs-CZ',{minimumFractionDigits:2,maximumFractionDigits:2});
   const czk=v=>v.toLocaleString('cs-CZ',{maximumFractionDigits:0});
   const fields={fee:'feeInput',fx:'fxInput',threshold:'thresholdInput'};
@@ -122,41 +122,110 @@ if (typeof document !== 'undefined') {
       });return tr;
     }));
   }
-  async function readJSON(path) {
-    const response=await fetch(path,{cache:'no-store',signal:AbortSignal.timeout(20000)});
-    if(!response.ok) throw Error(`Data nejsou dostupná (HTTP ${response.status}).`);
-    return response.json();
+  async function readJSON(path, signal) {
+    const request=new AbortController();
+    const abort=()=>request.abort();
+    signal.addEventListener('abort',abort,{once:true});
+    if(signal.aborted)request.abort();
+    const timer=setTimeout(abort,8000);
+    try {
+      const response=await fetch(path+(path.includes('?')?'&':'?')+'_='+Date.now(),{cache:'no-store',signal:request.signal});
+      if(!response.ok) throw Error(`Data nejsou dostupná (HTTP ${response.status}).`);
+      return await response.json();
+    } finally {clearTimeout(timer);signal.removeEventListener('abort',abort);}
+  }
+  function cached(expected) {
+    if(data?.date===expected) return data;
+    try {
+      const records=JSON.parse(localStorage.getItem('ote-verified-days')||'[]');
+      return validateData(records.find(p=>p.date===expected),expected);
+    } catch { return null; }
+  }
+  function remember(payload) {
+    try {
+      const records=JSON.parse(localStorage.getItem('ote-verified-days')||'[]');
+      localStorage.setItem('ote-verified-days',JSON.stringify([payload,...records.filter(p=>p.date!==payload.date)].slice(0,3)));
+    } catch {}
   }
   async function load() {
+    clearTimeout(retryTimer);
+    active?.abort();
+    const controller=new AbortController();active=controller;
     const token=++sequence,key=selected,expected=dateKey(new Date(),key==='tomorrow'?1:0);
-    data=null;selectedBar=null;showResults(false);loadedDate=dateKey();$('dateBadge').textContent=expected;
-    $('status').textContent='Načítám ceny OTE…';
+    const oldDate=data?.date;
+    data=cached(expected);
+    if(oldDate!==expected) selectedBar=null;
+    loadedDate=dateKey();lastAttempt=Date.now();$('dateBadge').textContent=expected;
+    render();
+    $('status').textContent=data?'Obnovuji data · zobrazuji uložené ceny pro tento den.':'Načítám ceny OTE…';
+    // AbortController also works on older iPhones without AbortSignal.timeout.
+    const timeout=setTimeout(()=>controller.abort(),25000);
+    let lastError;
     try {
-      const state=await readJSON('data/status.json');
+      // The repository is a second route to the same validated publisher output,
+      // independent of a failed GitHub Pages deployment.
+      for(const base of ['data/','https://raw.githubusercontent.com/davepilot88-boop/ote-gr/main/data/']) {
+        try {
+          const [stateResult,payloadResult]=await Promise.allSettled([
+            readJSON(base+'status.json',controller.signal),
+            readJSON(base+key+'.json',controller.signal)
+          ]);
+          if(token!==sequence)return;
+          const state=stateResult.status==='fulfilled'?stateResult.value:null;
+          const day=state?.days?.[key],age=Date.now()-Date.parse(state?.checkedAt);
+          const fresh=day?.date===expected&&Number.isFinite(age)&&age>=-300000&&age<=2*3600000;
+          if(fresh&&day.state==='unpublished'&&key==='tomorrow') {
+            data=null;showResults(false);failures=0;
+            $('status').textContent='Zítřejší ceny zatím nejsou zveřejněny.';return;
+          }
+          let payload=payloadResult.status==='fulfilled'?payloadResult.value:null;
+          // At midnight the last published tomorrow file can already contain today.
+          if(payload?.date!==expected&&key==='today') payload=await readJSON(base+'tomorrow.json',controller.signal);
+          data=validateData(payload,expected);
+          remember(data);render();failures=0;
+          const confirmed=fresh&&day.state==='available';
+          $('status').textContent=confirmed
+            ? `OTE · ověřeno ${new Date(state.checkedAt).toLocaleString('cs-CZ',{timeZone:'Europe/Prague'})}`
+            : 'OTE · poslední uložené ceny pro tento den. Nejnovější kontrolu nelze potvrdit.';
+          if(base!=='data/') $('status').textContent+=' · Načteno ze záložní adresy.';
+          if(data.prices.length!==24) $('status').textContent+=` · Změna času: ${data.prices.length} hodin.`;
+          return;
+        } catch(error) {lastError=error;if(controller.signal.aborted)break;}
+      }
+      throw lastError||Error('Data nejsou dostupná.');
+    } catch(error) {
       if(token!==sequence)return;
-      const day=state.days?.[key],age=Date.now()-Date.parse(state.checkedAt);
-      if(!day || day.date!==expected || !Number.isFinite(age) || age< -300000) throw Error('Aktualizace dat je zastaralá. Dostupnost cen nelze potvrdit.');
-      const delayed=age>2*3600000;
-      if(delayed && day.state!=='available') throw Error('Kontrola OTE se opozdila. Dostupnost nových cen zatím nelze potvrdit.');
-      if(day.state==='unpublished' && key==='tomorrow') {$('status').textContent='Zítřejší ceny zatím nejsou zveřejněny.';return;}
-      if(day.state!=='available') throw Error('Aktualizace OTE selhala. Poslední validní soubor zůstal zachován.');
-      const payload=await readJSON(`data/${key}.json`);
-      if(token!==sequence)return;
-      data=validateData(payload,expected);
-      // Delivery date and complete intervals determine whether saved prices apply.
-      // A delayed scheduler must not hide a valid, already published delivery day.
-      $('status').textContent=`OTE · ověřeno ${new Date(state.checkedAt).toLocaleString('cs-CZ',{timeZone:'Europe/Prague'})}${data.prices.length!==24?` · Změna času: ${data.prices.length} hodin. Označení a/b rozlišuje opakovanou hodinu.`:''}`;
-      render();
-      if(delayed) $('status').textContent+=' · Kontrola se opozdila. Zobrazuji poslední ověřené ceny pro tento den.';
-    } catch(error) {if(token===sequence){data=null;showResults(false);$('status').textContent=`Ceny nelze zobrazit. ${error.message}`;}}
+      data=cached(expected);render();
+      $('status').textContent=data
+        ? 'Spojení se nezdařilo. Zobrazuji uložené ceny pro tento den; aktualizaci automaticky zopakuji.'
+        : 'Ceny pro tento den se nepodařilo načíst. Aktualizaci automaticky zopakuji po obnovení spojení.';
+      failures++;
+      if(!document.hidden) retryTimer=setTimeout(load,Math.min(300000,15000*2**Math.min(failures-1,4)));
+    } finally {
+      clearTimeout(timeout);
+      if(token===sequence)active=null;
+    }
   }
   ['today','tomorrow'].forEach(key=>$(key+'Tab').addEventListener('click',()=>{
     selected=key;['today','tomorrow'].forEach(k=>$(k+'Tab').setAttribute('aria-pressed',String(k===key)));load();
   }));
   Object.values(fields).forEach(id=>$(id).addEventListener('input',render));
   $('refresh').addEventListener('click',load);
-  setInterval(()=>{if(loadedDate!==dateKey())load();else render();},60000);
-  setInterval(load,5*60000);
-  document.addEventListener('visibilitychange',()=>{if(!document.hidden)load();});
+  function resume() {
+    if(document.hidden)return;
+    // Coalesce pageshow/focus/visibility events but replace a suspended request.
+    if(active||Date.now()-lastAttempt>2000||loadedDate!==dateKey())load();
+  }
+  setInterval(()=>{
+    if(document.hidden)return;
+    if(loadedDate!==dateKey()||Date.now()-lastAttempt>=5*60000)load();
+    else if(data)render();
+  },30000);
+  document.addEventListener('visibilitychange',()=>{
+    if(document.hidden){active?.abort();clearTimeout(retryTimer);}else resume();
+  });
+  window.addEventListener('pageshow',resume);
+  window.addEventListener('focus',resume);
+  window.addEventListener('online',()=>{if(!document.hidden)load();});
   load();
 }
